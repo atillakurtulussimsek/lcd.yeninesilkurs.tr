@@ -1,19 +1,17 @@
 import {
   Playlist,
   PlaylistItem,
-  PLAYLIST_URL,
   detectMediaType,
 } from "./types";
 
 /**
- * Fetch and parse the playlist JSON from CDN.
- * Adds cache-busting query param to bypass browser/CDN stale caches.
+ * Fetch and parse the playlist JSON via the local API proxy.
+ * The proxy fetches from CDN server-side, avoiding CORS issues.
  * Falls back to null on failure so caller can retry or use cached data.
  */
 export async function fetchPlaylist(): Promise<PlaylistItem[] | null> {
   try {
-    const url = `${PLAYLIST_URL}?t=${Date.now()}`;
-    const res = await fetch(url, {
+    const res = await fetch(`/api/playlist?t=${Date.now()}`, {
       cache: "no-store",
       headers: { Accept: "application/json" },
     });

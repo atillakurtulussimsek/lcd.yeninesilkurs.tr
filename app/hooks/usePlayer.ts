@@ -10,6 +10,8 @@ export interface PlayerState {
   currentItem: PlaylistItem | null;
   /** Index within the playlist */
   currentIndex: number;
+  /** Unique playback ID (increments on each item change) */
+  playbackId: number;
   /** Whether the player is loading initially */
   loading: boolean;
   /** Error message if playlist load completely fails */
@@ -29,6 +31,7 @@ export function usePlayer(): PlayerState & {
   const [state, setState] = useState<PlayerState>({
     currentItem: null,
     currentIndex: -1,
+    playbackId: 0,
     loading: true,
     error: null,
   });
@@ -37,6 +40,8 @@ export function usePlayer(): PlayerState & {
   const indexRef = useRef<number>(-1);
   const cancelPreloadRef = useRef<(() => void) | null>(null);
   const mountedRef = useRef(true);
+  const playbackIdRef = useRef(0);
+  const prefetchedPlaylistRef = useRef<PlaylistItem[] | null>(null);
 
   /**
    * Advance to the next item. If at end of playlist, reload and restart.
@@ -49,7 +54,16 @@ export function usePlayer(): PlayerState & {
     // End of playlist or forced reload → re-fetch
     if (forceReload || nextIndex >= playlistRef.current.length) {
       console.log("[Player] Playlist ended or reload triggered. Fetching fresh playlist...");
-      const items = await fetchPlaylist();
+
+      // Use pre-fetched playlist if available (avoids network wait at cycle boundary)
+      let items: PlaylistItem[] | null = null;
+      if (prefetchedPlaylistRef.current && prefetchedPlaylistRef.current.length > 0) {
+        items = prefetchedPlaylistRef.current;
+        prefetchedPlaylistRef.current = null;
+        console.log("[Player] Using pre-fetched playlist");
+      } else {
+        items = await fetchPlaylist();
+      }
 
       if (items && items.length > 0) {
         playlistRef.current = items;
@@ -78,20 +92,35 @@ export function usePlayer(): PlayerState & {
     // Cancel previous preload
     cancelPreloadRef.current?.();
 
-    // Update state
+    // Update state with unique playback ID
+    playbackIdRef.current++;
     setState({
       currentItem: item,
       currentIndex: indexRef.current,
+      playbackId: playbackIdRef.current,
       loading: false,
       error: null,
     });
 
-    // Preload next item
+    // Preload next item in current playlist
     const nextIdx = indexRef.current + 1;
     if (nextIdx < playlistRef.current.length) {
       cancelPreloadRef.current = preloadMedia(playlistRef.current[nextIdx]);
     } else {
       cancelPreloadRef.current = null;
+    }
+
+    // Pre-fetch next playlist cycle when on the last item
+    // so there's no network wait at the cycle boundary
+    if (indexRef.current === playlistRef.current.length - 1 && !prefetchedPlaylistRef.current) {
+      fetchPlaylist().then((nextItems) => {
+        if (nextItems && nextItems.length > 0) {
+          prefetchedPlaylistRef.current = nextItems;
+          // Preload first item of next cycle for instant transition
+          preloadMedia(nextItems[0]);
+          console.log("[Player] Pre-fetched next playlist cycle");
+        }
+      });
     }
   }, []);
 
