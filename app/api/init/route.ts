@@ -5,7 +5,7 @@ import { initializeR2Bucket } from "@/app/services/r2-init";
  * GET /api/init
  *
  * Manually trigger R2 bucket structure check.
- * Creates any missing required files (playlist.json, media/ folder).
+ * Creates any missing required files (playlist.json, media/ folder)..
  *
  * Usage: curl https://lcd.yeninesilkurs.tr/api/init
  */
